@@ -1,16 +1,29 @@
 use winapi::um::winnt::HRESULT;
 
 #[derive(Debug, Fail)]
-#[fail(display = "{}:{}:{} 0x{:X}", file, line, col, hr)]
-pub struct HResult {
-  pub hr: HRESULT,
+#[fail(display = "{}:{}:{} {}", file, line, col, error)]
+pub struct Annotated<E> {
+  pub error: E,
   pub file: &'static str,
   pub line: u32,
   pub col: u32,
 }
 
-pub type Result<T> = ::std::result::Result<T, HResult>;
+pub type HResult<T> = ::std::result::Result<T, Annotated<HRESULT>>;
 
+#[macro_export]
+macro_rules! annotate_error {
+  ($e:expr) => {
+    $crate::errors::Annotated {
+      error: $e,
+      file: file!(),
+      line: line!(),
+      col: column!(),
+    }
+  };
+}
+
+#[macro_export]
 macro_rules! com_invoke {
   ($obj:ident.$fun:ident, $($arg:tt),*) => { com_invoke!(@imp [$obj.$fun] $($arg),*) };
   (($($fun:tt)*), $($arg:tt),*) => { com_invoke!(@imp [$($fun)*] $($arg),*) };
@@ -25,8 +38,8 @@ macro_rules! com_invoke {
         #[allow(unused_unsafe)]
         Ok(com_invoke!(@ret $($arg,)*))
       } else {
-        Err($crate::hr::HResult {
-          hr,
+        Err($crate::errors::Annotated {
+          error: hr,
           file: file!(),
           line: line!(),
           col: column!(),
@@ -47,19 +60,4 @@ macro_rules! com_invoke {
   (@ret (-> $a:ident), $($arg:tt,)*) => { ($a, com_invoke!(@ret $($arg,)*)) };
   (@ret (->> $a:ident), $($arg:tt,)*) => { (unsafe { ::wio::com::ComPtr::from_raw($a) }, com_invoke!(@ret $($arg,)*)) };
   (@ret $a:expr, $($arg:tt,)*) => { com_invoke!(@ret $($arg,)*) };
-}
-
-#[macro_export]
-macro_rules! try_hr {
-  ($e:expr) => {{
-    let hr = $e;
-    if !::winapi::shared::winerror::SUCCEEDED(hr) {
-      return Err(HResult {
-        hr,
-        file: file!(),
-        line: line!(),
-        col: col!(),
-      });
-    }
-  }};
 }

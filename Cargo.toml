@@ -1,0 +1,27 @@
+[package]
+name = "dwrite-everywhere"
+version = "0.1.0"
+authors = ["Trinh Hoang Anh <trha@outlook.com>"]
+
+[dependencies]
+winapi = { version = "0.3.5", features = ["d2d1", "d2d1_1", "d2d1_2", "d2d1_3", "dwrite", "dwrite_1", "dwrite_2", "dwrite_3", "dxgiformat", "windef", "debug", "combaseapi", "wincodec", "consoleapi"] }
+detour = "0.5.0"
+direct2d = { git = "https://github.com/Connicpu/direct2d-rs.git", rev = "c2a1889" }
+wio = "0.2.0"
+directwrite = "0.1.2"
+image = "0.19.0"
+lazy_static = "1.0.1"
+failure = "0.1.1"
+failure_derive = "0.1.1"
+gamma-lut = "0.2.3"
+serde_derive = "1.0.70"
+toml = "0.4.6"
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+lto = true
+
+[patch.crates-io]
+detour = { git = "https://github.com/trha/detour-rs.git", branch = "master" }
