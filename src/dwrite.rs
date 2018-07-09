@@ -1,5 +1,8 @@
+use super::d2d1_helper::matrix_3x2_f;
+use super::errors;
+use super::fns;
+use super::util::UnsafeSendSync;
 use std::{collections::HashMap, mem, ptr, slice, sync::RwLock};
-
 use winapi::{
   shared::{
     dxgiformat,
@@ -17,11 +20,6 @@ use winapi::{
 };
 use wio::com::ComPtr;
 
-use super::d2d1_helper::matrix_3x2_f;
-use super::errors;
-use super::fns;
-use super::util::UnsafeSendSync;
-
 lazy_static! {
   static ref GRA_CTXS: RwLock<HashMap<UnsafeSendSync<*const dw::IDWriteGlyphRunAnalysis>, GlyphRunData>> =
     RwLock::new(HashMap::new());
@@ -33,6 +31,7 @@ struct GlyphRunData {
 }
 
 unsafe impl Send for GlyphRunData {}
+
 unsafe impl Sync for GlyphRunData {}
 
 pub fn detour_create_glyph_run_analysis(
@@ -51,16 +50,15 @@ pub fn detour_create_glyph_run_analysis(
   mut baseline_origin_y: FLOAT,
   glyph_run_analysis: *mut *mut dw::IDWriteGlyphRunAnalysis,
 ) -> HRESULT {
-  unsafe {
-    //    let pixels_per_dip = 1.75;
-    let glyph_run = dw::DWRITE_GLYPH_RUN {
-      fontEmSize: (*glyph_run_1).fontEmSize * pixels_per_dip,
-      ..*glyph_run_1
-    };
-    baseline_origin_x *= pixels_per_dip;
-    baseline_origin_y *= pixels_per_dip;
+  let glyph_run = dw::DWRITE_GLYPH_RUN {
+    fontEmSize: (unsafe { *glyph_run_1 }).fontEmSize * pixels_per_dip,
+    ..unsafe { *glyph_run_1 }
+  };
+  baseline_origin_x *= pixels_per_dip;
+  baseline_origin_y *= pixels_per_dip;
 
-    let hr = create_glyph_run_analysis_3(
+  let hr = unsafe {
+    create_glyph_run_analysis_3(
       dw_fac_3,
       &glyph_run,
       transform,
@@ -75,28 +73,28 @@ pub fn detour_create_glyph_run_analysis(
       baseline_origin_x,
       baseline_origin_y,
       glyph_run_analysis,
-    );
+    )
+  };
 
-    if SUCCEEDED(hr) {
-      store_glyph_run(
-        &mut *this,
-        &mut *wic_fac,
-        &mut *d2d_fac,
-        *glyph_run_analysis,
-        &glyph_run,
-        transform,
-        if rendering_mode == dw::DWRITE_RENDERING_MODE_ALIASED {
-          dw::DWRITE_TEXTURE_ALIASED_1x1
-        } else {
-          dw::DWRITE_TEXTURE_CLEARTYPE_3x1
-        },
-        baseline_origin_x,
-        baseline_origin_y,
-        get_alpha_texture_bounds,
-      )
-    } else {
-      hr
-    }
+  if SUCCEEDED(hr) {
+    store_glyph_run(
+      this,
+      wic_fac,
+      d2d_fac,
+      unsafe { *glyph_run_analysis },
+      &glyph_run,
+      transform,
+      if rendering_mode == dw::DWRITE_RENDERING_MODE_ALIASED {
+        dw::DWRITE_TEXTURE_ALIASED_1x1
+      } else {
+        dw::DWRITE_TEXTURE_CLEARTYPE_3x1
+      },
+      baseline_origin_x,
+      baseline_origin_y,
+      get_alpha_texture_bounds,
+    )
+  } else {
+    hr
   }
 }
 
@@ -116,8 +114,8 @@ pub fn detour_create_glyph_run_analysis_2(
   baseline_origin_y: FLOAT,
   glyph_run_analysis: *mut *mut dw::IDWriteGlyphRunAnalysis,
 ) -> HRESULT {
-  unsafe {
-    let hr = tramp(
+  let hr = unsafe {
+    tramp(
       this,
       glyph_run,
       transform,
@@ -128,27 +126,27 @@ pub fn detour_create_glyph_run_analysis_2(
       baseline_origin_x,
       baseline_origin_y,
       glyph_run_analysis,
-    );
-    if SUCCEEDED(hr) {
-      store_glyph_run(
-        &mut *(this as *mut dw::IDWriteFactory),
-        &mut *wic_fac,
-        &mut *d2d_fac,
-        *glyph_run_analysis,
-        &*glyph_run,
-        transform,
-        if antialias_mode == dw_1::DWRITE_TEXT_ANTIALIAS_MODE_CLEARTYPE {
-          dw::DWRITE_TEXTURE_CLEARTYPE_3x1
-        } else {
-          dw::DWRITE_TEXTURE_ALIASED_1x1
-        },
-        baseline_origin_x,
-        baseline_origin_y,
-        get_alpha_texture_bounds,
-      )
-    } else {
-      hr
-    }
+    )
+  };
+  if SUCCEEDED(hr) {
+    store_glyph_run(
+      this as *mut dw::IDWriteFactory,
+      wic_fac,
+      d2d_fac,
+      unsafe { *glyph_run_analysis },
+      glyph_run,
+      transform,
+      if antialias_mode == dw_1::DWRITE_TEXT_ANTIALIAS_MODE_CLEARTYPE {
+        dw::DWRITE_TEXTURE_CLEARTYPE_3x1
+      } else {
+        dw::DWRITE_TEXTURE_ALIASED_1x1
+      },
+      baseline_origin_x,
+      baseline_origin_y,
+      get_alpha_texture_bounds,
+    )
+  } else {
+    hr
   }
 }
 
@@ -168,8 +166,8 @@ pub fn detour_create_glyph_run_analysis_3(
   baseline_origin_y: FLOAT,
   glyph_run_analysis: *mut *mut dw::IDWriteGlyphRunAnalysis,
 ) -> HRESULT {
-  unsafe {
-    let hr = tramp(
+  let hr = unsafe {
+    tramp(
       this,
       glyph_run,
       transform,
@@ -180,36 +178,36 @@ pub fn detour_create_glyph_run_analysis_3(
       baseline_origin_x,
       baseline_origin_y,
       glyph_run_analysis,
-    );
-    if SUCCEEDED(hr) {
-      store_glyph_run(
-        &mut *(this as *mut dw::IDWriteFactory),
-        &mut *wic_fac,
-        &mut *d2d_fac,
-        *glyph_run_analysis,
-        &*glyph_run,
-        transform,
-        if antialias_mode == dw_1::DWRITE_TEXT_ANTIALIAS_MODE_CLEARTYPE {
-          dw::DWRITE_TEXTURE_CLEARTYPE_3x1
-        } else {
-          dw::DWRITE_TEXTURE_ALIASED_1x1
-        },
-        baseline_origin_x,
-        baseline_origin_y,
-        get_alpha_texture_bounds,
-      )
-    } else {
-      hr
-    }
+    )
+  };
+  if SUCCEEDED(hr) {
+    store_glyph_run(
+      this as *mut dw::IDWriteFactory,
+      wic_fac,
+      d2d_fac,
+      unsafe { *glyph_run_analysis },
+      glyph_run,
+      transform,
+      if antialias_mode == dw_1::DWRITE_TEXT_ANTIALIAS_MODE_CLEARTYPE {
+        dw::DWRITE_TEXTURE_CLEARTYPE_3x1
+      } else {
+        dw::DWRITE_TEXTURE_ALIASED_1x1
+      },
+      baseline_origin_x,
+      baseline_origin_y,
+      get_alpha_texture_bounds,
+    )
+  } else {
+    hr
   }
 }
 
 fn store_glyph_run(
-  dw_fac: &mut dw::IDWriteFactory,
-  wic_fac: &mut wincodec::IWICImagingFactory,
-  d2d_fac: &mut d2d1::ID2D1Factory,
+  dw_fac: *mut dw::IDWriteFactory,
+  wic_fac: *mut wincodec::IWICImagingFactory,
+  d2d_fac: *mut d2d1::ID2D1Factory,
   gla: *mut dw::IDWriteGlyphRunAnalysis,
-  glyph_run: &dw::DWRITE_GLYPH_RUN,
+  glyph_run: *const dw::DWRITE_GLYPH_RUN,
   transform: *const dw::DWRITE_MATRIX,
   texture_type: dw::DWRITE_TEXTURE_TYPE,
   baseline_x: FLOAT,
@@ -223,11 +221,11 @@ fn store_glyph_run(
     unsafe { matrix_3x2_f::from_dwrite_matrix(&*transform) }
   };
   match embolden2(
-    dw_fac,
-    wic_fac,
-    d2d_fac,
+    unsafe { &mut *dw_fac },
+    unsafe { &mut *wic_fac },
+    unsafe { &mut *d2d_fac },
     gla,
-    glyph_run,
+    unsafe { &*glyph_run },
     trans,
     texture_type,
     baseline_x,
@@ -255,7 +253,18 @@ pub fn detour_get_alpha_texture_bounds(
   texture_type: dw::DWRITE_TEXTURE_TYPE,
   rc: *mut RECT,
 ) -> HRESULT {
-  unsafe { tramp(this, texture_type, rc) }
+  if let Some(data) = (*GRA_CTXS)
+    .read()
+    .unwrap()
+    .get(unsafe { &UnsafeSendSync::new(this) })
+  {
+    unsafe {
+      *rc = data.bounds;
+    }
+    0
+  } else {
+    unsafe { tramp(this, texture_type, rc) }
+  }
 }
 
 fn embolden2(
@@ -270,9 +279,16 @@ fn embolden2(
   baseline_y: FLOAT,
   get_alpha_texture_bounds: fns::GetAlphaTextureBounds,
 ) -> errors::HResult<GlyphRunData> {
-  let (bounds, ()) = com_invoke!((get_alpha_texture_bounds), gla, texture_type, (-> p))?;
+  let (mut bounds, ()) = com_invoke!((get_alpha_texture_bounds), gla, texture_type, (-> p))?;
+  // Leave space for outline.
+  bounds.left -= 1;
+  bounds.top -= 1;
+  bounds.right += 1;
+  bounds.bottom += 1;
+
   let width = bounds.right - bounds.left;
   let height = bounds.bottom - bounds.top;
+
   let (bgra_bm, ()) = com_invoke!(
     wic_fac.CreateBitmap,
     (width as u32),
@@ -303,7 +319,7 @@ fn embolden2(
     com_invoke!(
         d2d_fac.CreateTransformedGeometry,
         (outline.as_raw() as *mut d2d1::ID2D1Geometry),
-        (&matrix_3x2_f::mul(&transform, &matrix_3x2_f::translate(baseline_x - (bounds.left as f32), baseline_y - (bounds.top as f32)))),
+        (&matrix_3x2_f::mul(&transform, &matrix_3x2_f::translate(baseline_x + 1.0 - (bounds.left as f32), baseline_y + 1.0 - (bounds.top as f32)))),
         (->> p)
       )?
   };
@@ -373,8 +389,8 @@ fn embolden2(
     rt.SetTransform(&matrix_3x2_f::mul(
       &transform,
       &matrix_3x2_f::translate(
-        baseline_x - (bounds.left as f32),
-        baseline_y - (bounds.top as f32),
+        baseline_x + 1.0 - (bounds.left as f32),
+        baseline_y + 1.0 - (bounds.top as f32),
       ),
     ));
     rt.DrawGlyphRun(
