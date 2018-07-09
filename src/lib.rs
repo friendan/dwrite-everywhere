@@ -115,7 +115,7 @@ fn run() -> errors::HResult<()> {
     (combaseapi::CoInitializeEx),
     (ptr::null_mut()),
     (combaseapi::COINITBASE_MULTITHREADED)
-  ).unwrap();
+  )?;
   let dw_fac = unsafe {
     ComPtr::from_raw(
       com_invoke!(
