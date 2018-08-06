@@ -10,6 +10,7 @@ extern crate failure;
 extern crate failure_derive;
 #[macro_use]
 extern crate serde_derive;
+extern crate encoding;
 extern crate toml;
 
 #[macro_use]
@@ -18,6 +19,7 @@ pub mod config;
 pub mod d2d1_helper;
 pub mod dwrite;
 pub mod fns;
+pub mod gdi;
 pub mod util;
 
 use std::{ffi::OsString, mem, ptr, sync::Mutex};
@@ -156,7 +158,7 @@ fn run() -> errors::HResult<()> {
         (&wincodec::IWICImagingFactory::uuidof()),
         (-> p)
       ).unwrap()
-        .0 as *mut wincodec::IWICImagingFactory,
+      .0 as *mut wincodec::IWICImagingFactory,
     )
   };
   let d2d_fac = unsafe {
@@ -168,7 +170,7 @@ fn run() -> errors::HResult<()> {
         (ptr::null()),
         (-> p)
       ).unwrap()
-        .0 as *mut d2d1::ID2D1Factory,
+      .0 as *mut d2d1::ID2D1Factory,
     )
   };
 
@@ -218,8 +220,7 @@ fn run() -> errors::HResult<()> {
       .initialize(
         (*(*gla.as_raw()).lpVtbl).GetAlphaTextureBounds,
         dwrite::detour_get_alpha_texture_bounds,
-      )
-      .unwrap();
+      ).unwrap();
     d_get_alpha_texture_bounds.enable().unwrap();
 
     let mut d_create_glyph_run_analysis_2 = DetourCreateGlyphRunAnalysis2
@@ -255,8 +256,7 @@ fn run() -> errors::HResult<()> {
             glyph_run_analysis,
           )
         }
-      })
-      .unwrap();
+      }).unwrap();
     d_create_glyph_run_analysis_2.enable().unwrap();
 
     let mut d_create_glyph_run_analysis_3 = DetourCreateGlyphRunAnalysis3
@@ -292,8 +292,7 @@ fn run() -> errors::HResult<()> {
             glyph_run_analysis,
           )
         }
-      })
-      .unwrap();
+      }).unwrap();
     d_create_glyph_run_analysis_3.enable().unwrap();
 
     let mut d_create_glyph_run_analysis = DetourCreateGlyphRunAnalysis
@@ -331,8 +330,7 @@ fn run() -> errors::HResult<()> {
             analysis,
           )
         }
-      })
-      .unwrap();
+      }).unwrap();
     d_create_glyph_run_analysis.enable().unwrap();
 
     let mut d_create_alpha_texture = DetourCreateAlphaTexture
@@ -347,16 +345,14 @@ fn run() -> errors::HResult<()> {
             buffer_size,
           )
         }
-      })
-      .unwrap();
+      }).unwrap();
     d_create_alpha_texture.enable().unwrap();
 
     let mut d_glyph_run_analysis_release = DetourGlyphRunAnalysisRelease
       .initialize(
         (*(*gla.as_raw()).lpVtbl).parent.Release,
         dwrite::detour_glyph_run_analysis_release,
-      )
-      .unwrap();
+      ).unwrap();
     d_glyph_run_analysis_release.enable().unwrap();
 
     *DETOURS.lock().unwrap() = Some(Detours {

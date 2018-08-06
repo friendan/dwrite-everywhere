@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Trinh Hoang Anh <trha@outlook.com>"]
 
 [dependencies]
-winapi = { version = "0.3.5", features = ["d2d1", "d2d1_1", "d2d1_2", "d2d1_3", "dwrite", "dwrite_1", "dwrite_2", "dwrite_3", "dxgiformat", "windef", "debug", "combaseapi", "wincodec", "consoleapi"] }
+winapi = { version = "0.3.5", features = ["d2d1", "d2d1_1", "d2d1_2", "d2d1_3", "dwrite", "dwrite_1", "dwrite_2", "dwrite_3", "dxgiformat", "windef", "debug", "combaseapi", "wincodec", "consoleapi", "wingdi"] }
 detour = "0.5.0"
 direct2d = { git = "https://github.com/Connicpu/direct2d-rs.git", rev = "c2a1889" }
 wio = "0.2.0"
@@ -16,6 +16,7 @@ failure_derive = "0.1.1"
 gamma-lut = "0.2.3"
 serde_derive = "1.0.70"
 toml = "0.4.6"
+encoding = "0.2.33"
 
 [lib]
 crate-type = ["cdylib"]

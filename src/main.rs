@@ -33,7 +33,7 @@ fn main() {
       OsString::from(
         r"C:\Users\tr\projects\dwrite-everywhere\target\debug\dwrite_everywhere.dll".to_string(),
       ).to_wide_null()
-        .as_ptr(),
+      .as_ptr(),
     );
     assert_ne!(ptr::null_mut(), h);
   };

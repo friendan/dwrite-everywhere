@@ -421,8 +421,8 @@ pub fn detour_create_alpha_texture(
     copy_texture(data, texture_type, unsafe { &*texture_bounds }, unsafe {
       slice::from_raw_parts_mut(alpha_values, buffer_size as usize)
     }).err()
-      .map(|e| e.error)
-      .unwrap_or(0)
+    .map(|e| e.error)
+    .unwrap_or(0)
   } else {
     unsafe {
       tramp(
