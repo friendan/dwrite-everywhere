@@ -1,17 +1,39 @@
 #![cfg(windows)]
+#![recursion_limit = "256"]
 #[macro_use]
 extern crate detour;
-extern crate winapi;
-extern crate wio;
-#[macro_use]
-extern crate lazy_static;
+extern crate encoding;
 extern crate failure;
 #[macro_use]
 extern crate failure_derive;
 #[macro_use]
+extern crate lazy_static;
+#[macro_use]
 extern crate serde_derive;
-extern crate encoding;
 extern crate toml;
+extern crate winapi;
+extern crate wio;
+
+use detour::StaticDetour;
+use std::{
+  ffi::{CString, OsString},
+  mem, ptr,
+  sync::Mutex,
+};
+use winapi::{
+  shared::{
+    basetsd::UINT32,
+    minwindef::{BOOL, BYTE, DWORD, FALSE, FLOAT, HINSTANCE, LPVOID, TRUE, ULONG},
+    windef,
+    winerror::HRESULT,
+  },
+  um::{
+    combaseapi, consoleapi, d2d1, dcommon, dwrite as dw, dwrite_1 as dw_1, dwrite_2 as dw_2,
+    dwrite_3 as dw_3, libloaderapi, unknwnbase::IUnknown, wincodec,
+  },
+  Interface,
+};
+use wio::{com::ComPtr, wide::ToWide};
 
 #[macro_use]
 pub mod errors;
@@ -22,24 +44,6 @@ pub mod fns;
 pub mod gdi;
 pub mod util;
 
-use std::{ffi::OsString, mem, ptr, sync::Mutex};
-
-use detour::StaticDetour;
-use winapi::{
-  shared::{
-    basetsd::UINT32,
-    minwindef::{BOOL, BYTE, DWORD, FALSE, FLOAT, HINSTANCE, LPVOID, TRUE, ULONG},
-    windef::RECT,
-    winerror::HRESULT,
-  },
-  um::{
-    combaseapi, consoleapi, d2d1, dcommon, dwrite as dw, dwrite_1 as dw_1, dwrite_2 as dw_2,
-    dwrite_3 as dw_3, unknwnbase::IUnknown, wincodec,
-  },
-  Interface,
-};
-use wio::{com::ComPtr, wide::ToWide};
-
 #[allow(dead_code)]
 struct Detours {
   d_create_glyph_run_analysis: StaticDetour<fns::CreateGlyphRunAnalysis>,
@@ -48,6 +52,8 @@ struct Detours {
   d_create_alpha_texture: StaticDetour<fns::CreateAlphaTexture>,
   d_get_alpha_texture_bounds: StaticDetour<fns::GetAlphaTextureBounds>,
   d_glyph_run_analysis_release: StaticDetour<fns::Release>,
+  d_ext_text_out_w: StaticDetour<fns::ExtTextOutW>,
+  d_text_out_w: StaticDetour<fns::TextOutW>,
 }
 
 lazy_static! {
@@ -96,7 +102,7 @@ static_detours! {
   struct DetourCreateAlphaTexture: unsafe extern "system" fn (
     *mut dw::IDWriteGlyphRunAnalysis,
     dw::DWRITE_TEXTURE_TYPE,
-    *const RECT,
+    *const windef::RECT,
     *mut BYTE,
     UINT32
   ) -> HRESULT;
@@ -104,12 +110,31 @@ static_detours! {
   struct DetourGetAlphaTextureBounds: unsafe extern "system" fn (
     *mut dw::IDWriteGlyphRunAnalysis,
     dw::DWRITE_TEXTURE_TYPE,
-    *mut RECT
+    *mut windef::RECT
   ) -> HRESULT;
 
   struct DetourGlyphRunAnalysisRelease: unsafe extern "system" fn (
     *mut IUnknown
   ) -> ULONG;
+
+  struct DetourExtTextOutW: unsafe extern "system" fn (
+    windef::HDC,
+    i32,
+    i32,
+    u32,
+    *const windef::RECT,
+    *const u16,
+    u32,
+    *const i32
+  ) -> i32;
+
+  struct DetourTextOutW: unsafe extern "system" fn (
+    windef::HDC,
+    i32,
+    i32,
+    *const u16,
+    i32
+  ) -> i32;
 }
 
 fn run() -> errors::HResult<()> {
@@ -157,8 +182,7 @@ fn run() -> errors::HResult<()> {
         (combaseapi::CLSCTX_INPROC),
         (&wincodec::IWICImagingFactory::uuidof()),
         (-> p)
-      ).unwrap()
-      .0 as *mut wincodec::IWICImagingFactory,
+      )?.0 as *mut wincodec::IWICImagingFactory,
     )
   };
   let d2d_fac = unsafe {
@@ -169,10 +193,13 @@ fn run() -> errors::HResult<()> {
         (&d2d1::ID2D1Factory::uuidof()),
         (ptr::null()),
         (-> p)
-      ).unwrap()
-      .0 as *mut d2d1::ID2D1Factory,
+      )?.0 as *mut d2d1::ID2D1Factory,
     )
   };
+  let (dw_gdi, ()) = com_invoke!(
+    dw_fac.GetGdiInterop,
+    (->> p)
+  )?;
 
   let (collection, ()) = com_invoke!(dw_fac.GetSystemFontCollection, (->> p), FALSE).unwrap();
   let (fam_idx, (fam_exists, ())) = com_invoke!(
@@ -355,6 +382,53 @@ fn run() -> errors::HResult<()> {
       ).unwrap();
     d_glyph_run_analysis_release.enable().unwrap();
 
+    let h_gdi32 = {
+      let gdi32 = CString::new("gdi32.dll").unwrap();
+      libloaderapi::GetModuleHandleA(gdi32.as_ptr())
+    };
+    let TextOutW = {
+      let s = CString::new("TextOutW").unwrap();
+      libloaderapi::GetProcAddress(h_gdi32, s.as_ptr())
+    };
+    let ExtTextOutW = {
+      let s = CString::new("ExtTextOutW").unwrap();
+      libloaderapi::GetProcAddress(h_gdi32, s.as_ptr())
+    };
+
+    let mut d_ext_text_out_w = DetourExtTextOutW
+      .initialize(mem::transmute(ExtTextOutW), {
+        let dw_fac_3 = util::UnsafeSendSync::new(dw_fac_3.clone());
+        let d2d_fac = util::UnsafeSendSync::new(d2d_fac.clone());
+        let dw_gdi = util::UnsafeSendSync::new(dw_gdi.clone());
+        let create_glyph_run_analysis = mem::transmute(d_create_glyph_run_analysis_3.trampoline());
+        let get_alpha_texture_bounds = mem::transmute(d_get_alpha_texture_bounds.trampoline());
+
+        move |tramp, hdc, x, y, options, rect, s, c, dxs| {
+          gdi::ext_text_out_w(
+            dw_fac_3.as_ref().as_raw(),
+            d2d_fac.as_ref().as_raw(),
+            dw_gdi.as_ref().as_raw(),
+            create_glyph_run_analysis,
+            get_alpha_texture_bounds,
+            tramp,
+            hdc,
+            x,
+            y,
+            options,
+            rect,
+            s,
+            c,
+            dxs,
+          )
+        }
+      }).unwrap();
+    d_ext_text_out_w.enable().unwrap();
+
+    let mut d_text_out_w = DetourTextOutW
+      .initialize(mem::transmute(TextOutW), gdi::text_out_w)
+      .unwrap();
+    d_text_out_w.enable().unwrap();
+
     *DETOURS.lock().unwrap() = Some(Detours {
       d_create_alpha_texture,
       d_create_glyph_run_analysis,
@@ -362,6 +436,8 @@ fn run() -> errors::HResult<()> {
       d_create_glyph_run_analysis_3,
       d_get_alpha_texture_bounds,
       d_glyph_run_analysis_release,
+      d_ext_text_out_w,
+      d_text_out_w,
     })
   }
 

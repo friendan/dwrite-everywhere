@@ -1,7 +1,7 @@
 use winapi::{
   shared::{
     minwindef::{FLOAT, ULONG},
-    windef::RECT,
+    windef,
   },
   um::{
     dcommon, dwrite as dw, dwrite_1 as dw_1, dwrite_2 as dw_2, dwrite_3 as dw_3,
@@ -47,16 +47,31 @@ pub type CreateGlyphRunAnalysis = unsafe extern "system" fn(
   *mut *mut dw::IDWriteGlyphRunAnalysis,
 ) -> HRESULT;
 
-pub type GetAlphaTextureBounds =
-  unsafe extern "system" fn(*mut dw::IDWriteGlyphRunAnalysis, dw::DWRITE_TEXTURE_TYPE, *mut RECT)
-    -> HRESULT;
+pub type GetAlphaTextureBounds = unsafe extern "system" fn(
+  *mut dw::IDWriteGlyphRunAnalysis,
+  dw::DWRITE_TEXTURE_TYPE,
+  *mut windef::RECT,
+) -> HRESULT;
 
 pub type Release = unsafe extern "system" fn(*mut IUnknown) -> ULONG;
 
 pub type CreateAlphaTexture = unsafe extern "system" fn(
   *mut dw::IDWriteGlyphRunAnalysis,
   dw::DWRITE_TEXTURE_TYPE,
-  *const RECT,
+  *const windef::RECT,
   *mut u8,
   u32,
 ) -> HRESULT;
+
+pub type ExtTextOutW = unsafe extern "system" fn(
+  windef::HDC,
+  i32,
+  i32,
+  u32,
+  *const windef::RECT,
+  *const u16,
+  u32,
+  *const i32,
+) -> i32;
+
+pub type TextOutW = unsafe extern "system" fn(windef::HDC, i32, i32, *const u16, i32) -> i32;
